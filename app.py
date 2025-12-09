@@ -1,94 +1,131 @@
-# app.py
 import os
+import json
+import time
+import statistics
 import google.generativeai as genai
 from flask import Flask, render_template, request, jsonify
+from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
+# Load API Key
 load_dotenv()
 
 app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = 'static/uploads'
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# Configure the Gemini API
-try:
-    genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-    model = genai.GenerativeModel('gemini-1.5-flash')
-    print("Gemini API configured successfully.")
-except Exception as e:
-    print(f"Error configuring Gemini API: {e}")
-    model = None
+# Configure Gemini 2.5 Flash
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+if not GEMINI_API_KEY:
+    print("❌ WARNING: GEMINI_API_KEY not found in .env")
+
+genai.configure(api_key=GEMINI_API_KEY)
+# Using the specific model we verified exists
+model = genai.GenerativeModel('gemini-2.5-flash')
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
-@app.route('/analyze', methods=['POST'])
-def analyze():
-    if not model:
-        return jsonify({"error": "AI model not configured. Check API key."}), 500
+@app.route('/analyze_audio', methods=['POST'])
+def analyze_audio():
+    if 'audio_data' not in request.files:
+        return jsonify({"error": "No audio file provided"}), 400
+    
+    file = request.files['audio_data']
+    filename = secure_filename(f"user_recording_{int(time.time())}.wav")
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    file.save(filepath)
 
+    print("Analyzing audio pattern...")
+    
+    try:
+        audio_file = genai.upload_file(path=filepath)
+        
+        prompt = """
+        Analyze this audio for ADHD markers:
+        1. Tangentiality (wandering off-topic).
+        2. Speed/Pacing (too fast or cluttering).
+        3. Fillers (excessive 'um', 'ah').
+        
+        Return a concise summary (max 2 sentences) of the speech pattern observations.
+        """
+        
+        result = model.generate_content([prompt, audio_file])
+        analysis_text = result.text
+        
+        # Cleanup
+        audio_file.delete()
+        os.remove(filepath)
+        
+        return jsonify({"analysis": analysis_text})
+        
+    except Exception as e:
+        print(f"Error in audio analysis: {e}")
+        return jsonify({"analysis": "Audio analysis failed due to server error."}), 500
+
+@app.route('/final_report', methods=['POST'])
+def final_report():
     data = request.json
     
-    # --- FINAL PROMPT FOR A CLEAR, DIRECT, AND SAFE CONCLUSION ---
+    # 1. Process Data
+    rt = data.get('reactionTimes', [])
+    variability = statistics.stdev(rt) if len(rt) > 1 else 0
+    memory_score = data.get('memoryScore', 0)
+    stroop_score = data.get('stroopScore', 0)
+    time_diff = abs(data.get('timeDiff', 0))
+    speech_analysis = data.get('audioAnalysis', 'No speech data.')
+
+    # 2. Prepare Scores for Chart (Frontend needs raw numbers)
+    scores = {
+        "variability": variability,
+        "memory": memory_score,
+        "stroop": stroop_score,
+        "time_diff": time_diff
+    }
+
+    # 3. Generate Clinical Report
     prompt = f"""
-    You are an analytical assistant for the "ADHD Insight" hackathon project.
-
-    **YOUR MOST IMPORTANT RULE: YOU MUST NOT DIAGNOSE THE USER. NEVER USE THE PHRASES "YOU HAVE ADHD" or "YOU DO NOT HAVE ADHD".**
-
-    Your task is to analyze the user's test results and classify them into one of three 'Pattern Correlation' levels. You must present the results in two parts: a Markdown table and a final conclusion.
-
-    **User's Data:**
-    - Questionnaire Score: {data['hyperactivityScore']} out of 24. (Score > 14 is an indicator).
-    - Avg Reaction Time: {data['avgReactionTime']:.0f} ms. (Time > 400ms is an indicator).
-    - Attention Test: {data['attentionMisses']} Misses, {data['attentionFalseClicks']} False Clicks. (Misses > 4 or False Clicks > 4 is an indicator).
-    - Visual Memory Score: Reached level {data['memoryScore']}. (Score < 4 is an indicator).
-
-    **OUTPUT INSTRUCTIONS:**
-
-    **Part 1: The Table**
-    First, create the exact same Markdown table as before with "Test Area", "Your Result", and "Brief Insight".
-
-    **Part 2: The Final Conclusion**
-    After the table, you must choose **ONE** of the three conclusion blocks below based on the number of indicators present in the user's data. Output the chosen block verbatim.
-
-    ---
-    **[Use this block if 0 or 1 indicator is present]**
-    ### Final Conclusion
-
-    **Result:** **Low Correlation**
+    You are a strictly analytical algorithm. Generate a Cognitive Screening Analysis based on these 5 data points.
     
-    **Interpretation:** Your results do not show a significant pattern of traits commonly associated with ADHD. While everyone can have moments of distraction or impulsivity, your performance across these tests largely falls within a typical range.
+    **USER DATA:**
+    1. Speech Pattern: "{speech_analysis}"
+    2. Motor Variability: {variability:.2f} ms (Standard: <150ms. High variability = Attention Lapses).
+    3. Working Memory: Level {memory_score} (Standard: >4. Low = Working Memory Deficit).
+    4. Impulse Control: {stroop_score}% Accuracy (Standard: >80%. Low = Impulsivity).
+    5. Time Blindness: {time_diff:.2f}s deviation (Standard: <2.0s. High = Dyschronometria).
 
-    ---
-    **[Use this block if 2 indicators are present]**
-    ### Final Conclusion
-
-    **Result:** **Moderate Correlation**
-
-    **Interpretation:** Your results show a mixed pattern. While you performed within the typical range on some tests, a couple of areas showed traits that are sometimes associated with ADHD. This could suggest a specific area of challenge, such as impulsivity or inattention, rather than a broad pattern.
-
-    ---
-    **[Use this block if 3 or 4 indicators are present]**
-    ### Final Conclusion
-
-    **Result:** **Strong Correlation**
-
-    **Interpretation:** Your results show a strong correlation with patterns of traits commonly seen in individuals with ADHD, particularly in the areas of inattention, impulsivity, or memory. This is a significant finding, and **it is strongly recommended that you share and discuss these results with a doctor or mental health professional.** They can provide a proper evaluation and guidance.
+    **STRICT WRITING RULES:**
+    - **NO** headers like "Client Name" or "Date".
+    - **NO** introduction. Start immediately with the "Executive Summary".
+    - **NO** roleplay. Be direct, objective, and data-driven.
+    - **MUST** quote the user's specific score in every bullet point analysis.
     
-    ---
+    **REPORT STRUCTURE:**
+    
+    ### Executive Summary
+    [Synthesize the profile in 3 sentences. Does it align with ADHD traits (High variability, Low Memory, Time Blindness)?]
+    
+    ### Domain Analysis
+    * **Attention Stability:** [State score. Analyze.]
+    * **Working Memory:** [State Level. Analyze.]
+    * **Impulse Control:** [State %. Analyze.]
+    * **Time Perception:** [State deviation. Analyze.]
+    * **Speech:** [Summarize findings.]
 
-    Now, generate the complete response (table and one conclusion block) for the user's data.
+    ### Recommendation
+    [If 2+ metrics are outside standard ranges, strongly recommend professional evaluation. If mostly normal, provide reassurance.]
     """
-
+    
     try:
         response = model.generate_content(prompt)
-        ai_analysis = response.text
-        
-        return jsonify({"analysis": ai_analysis})
-
+        return jsonify({
+            "markdown_report": response.text,
+            "scores": scores
+        })
     except Exception as e:
-        print(f"Error calling Gemini API: {e}")
-        return jsonify({"error": "Failed to get analysis from AI model."}), 500
+        print(f"Error generating report: {e}")
+        return jsonify({"error": "Report generation failed"}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, port=5000)

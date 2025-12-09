@@ -3,86 +3,107 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ADHD Insight - Screening Tool</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <title>NeuroFocus AI | Full Battery</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
-
-    <!-- ADD THIS LINE TO CONVERT THE AI'S RESPONSE TO A TABLE -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <!-- The rest of your body tag remains exactly the same... -->
-    <div class="container">
+
+    <div class="background-orb orb-1"></div>
+    <div class="background-orb orb-2"></div>
+
+    <div class="glass-container">
         <header>
-            <h1>ADHD Insight</h1>
-            
+            <h1>NeuroFocus <span class="highlight">AI</span></h1>
+            <p>5-Stage Cognitive Battery</p>
         </header>
 
-        <!-- Progress Bar -->
-        <div class="progress-bar-container">
-            <div class="progress-bar"></div>
-        </div>
-
-        <main id="wizard">
-            <!-- All your wizard steps are unchanged... -->
-            <!-- Step 0: Welcome -->
-            <div class="wizard-step active" id="step-0">
-                <h2>Welcome to the Screening</h2>
-                <p>This tool consists of four short tests to explore cognitive patterns related to attention, impulsivity, and memory. Please complete them in a quiet environment.</p>
-                <p class="disclaimer"><strong>Disclaimer:</strong> This is a hackathon project, not a diagnostic tool. Consult a healthcare professional for an accurate diagnosis.</p>
-                <button class="next-btn">Start</button>
+        <section id="step-0" class="step active">
+            <div class="card-content">
+                <h2>The Protocol</h2>
+                <p>We will analyze 5 key markers: <strong>Speech, Focus, Memory, Inhibition, and Time Perception</strong>.</p>
+                <button class="btn-primary" onclick="goToStep(1)">Initialize System</button>
             </div>
+        </section>
 
-            <!-- Step 1: Hyperactivity Questionnaire -->
-            <div class="wizard-step" id="step-1">
-                <h2>Test 1: Questionnaire</h2>
-                <p>Based on the last 6 months, how often do you...</p>
-                <div id="hyperactivity-content"></div>
-                <button class="next-btn" disabled>Next Test</button>
-            </div>
-
-            <!-- Step 2: Reaction Time -->
-            <div class="wizard-step" id="step-2">
-                <h2>Test 2: Reaction Time</h2>
-                <p>Click the colored box as soon as it turns <span style="color:#2ecc71;">green</span>. Complete 5 rounds.</p>
-                <div id="reaction-box">Click me to start</div>
-                <p>Average: <span id="reaction-avg">0</span> ms</p>
-                <button class="next-btn" disabled>Next Test</button>
-            </div>
-
-            <!-- Step 3: Attention Span -->
-            <div class="wizard-step" id="step-3">
-                <h2>Test 3: Attention Span</h2>
-                <p>Press the <strong>spacebar</strong> ONLY for the <span style="color:#2ecc71;">green circle</span>. Do nothing for the red square. (30 seconds)</p>
-                <button id="start-attention">Start Attention Test</button>
-                <div id="attention-stimulus-container">
-                    <div id="attention-stimulus"></div>
+        <section id="step-1" class="step">
+            <div class="card-content">
+                <h2>Phase 1: Speech Pattern</h2>
+                <p class="instruction">Tap 'Record' and describe <strong>"How you plan your day"</strong> for 30 seconds.</p>
+                <div class="visualizer-box">
+                    <div id="wave" class="wave hidden"><span></span><span></span><span></span><span></span><span></span></div>
                 </div>
-                <p>Hits: <span id="attention-hits">0</span> | Misses: <span id="attention-misses">0</span> | False Clicks: <span id="attention-false-clicks">0</span></p>
-                <button class="next-btn" disabled>Next Test</button>
+                <button id="record-btn" class="btn-primary">Start Recording</button>
+                <p id="audio-status" class="status-text"></p>
             </div>
+        </section>
 
-            <!-- Step 4: Memory Test -->
-            <div class="wizard-step" id="step-4">
-                <h2>Test 4: Visual Memory</h2>
-                <p>Memorize the sequence of glowing tiles, then repeat it. The sequence gets longer each level.</p>
-                <button id="start-memory">Start Memory Test</button>
-                <div id="memory-grid"></div>
-                <p>Highest Level: <span id="memory-level">0</span></p>
-                <button id="get-results-btn" disabled>See My Results</button>
+        <section id="step-2" class="step">
+            <div class="card-content">
+                <h2>Phase 2: Motor Variability</h2>
+                <p class="instruction">Click the box when it turns <strong>GREEN</strong>.</p>
+                <div id="reaction-start-overlay">
+                    <button class="btn-primary" onclick="initReactionTest()">Start Motor Test</button>
+                </div>
+                <div id="reaction-area" class="reaction-box hidden">Wait for Green...</div>
+                <p id="reaction-counter">Round: 0/5</p>
             </div>
+        </section>
 
-            <!-- Step 5: Results -->
-            <div class="wizard-step" id="step-5">
-                <h2>Your AI-Powered Analysis</h2>
-                <div class="loader" id="loader"></div>
-                <div id="results-output"></div>
-                 <p class="disclaimer">Remember, this analysis is generated by AI for informational purposes and is not a substitute for professional medical advice.</p>
+        <section id="step-3" class="step">
+            <div class="card-content">
+                <h2>Phase 3: Working Memory</h2>
+                <p class="instruction">Memorize the glowing sequence.</p>
+                <button id="memory-start-btn" class="btn-primary" onclick="startMemoryTest()">Start Memory Test</button>
+                <div id="memory-grid" class="memory-grid hidden"></div>
+                <p id="memory-level-display">Level: 0</p>
             </div>
-        </main>
+        </section>
+
+        <section id="step-4" class="step">
+            <div class="card-content">
+                <h2>Phase 4: Inhibition Control</h2>
+                <p class="instruction">Click the button that matches the <strong>INK COLOR</strong>, not the word.</p>
+                <button id="stroop-start-btn" class="btn-primary" onclick="startStroopTest()">Start Stroop Test</button>
+                
+                <div id="stroop-game" class="hidden">
+                    <div id="stroop-word">WORD</div>
+                    <div class="stroop-options">
+                        <button class="stroop-btn" onclick="handleStroop('red')">Red</button>
+                        <button class="stroop-btn" onclick="handleStroop('blue')">Blue</button>
+                        <button class="stroop-btn" onclick="handleStroop('green')">Green</button>
+                    </div>
+                </div>
+                <p id="stroop-counter">Round: 0/5</p>
+            </div>
+        </section>
+
+        <section id="step-5" class="step">
+            <div class="card-content">
+                <h2>Phase 5: Time Perception</h2>
+                <p class="instruction"><strong>Time Blindness Check:</strong></p>
+                <p>Click and <strong>HOLD</strong> the button below. Release it when you feel exactly <strong>10 Seconds</strong> have passed.</p>
+                
+                <button id="time-btn" class="btn-primary">HOLD ME</button>
+                <p id="time-result" class="status-text"></p>
+            </div>
+        </section>
+
+        <section id="step-6" class="step">
+            <div class="card-content">
+                <h2>Neuro-Cognitive Profile</h2>
+                <div class="loader"></div>
+                
+                <div class="chart-container" style="position: relative; height:300px; width:100%; margin-bottom: 20px; display:none;">
+                    <canvas id="resultsChart"></canvas>
+                </div>
+
+                <div id="final-report" class="markdown-body"></div>
+                <button class="btn-primary" onclick="window.print()" style="margin-top: 20px; background: #334155;">Save PDF</button>
+            </div>
+        </section>
     </div>
     <script src="/static/js/script.js"></script>
 </body>

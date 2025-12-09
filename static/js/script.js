@@ -1,280 +1,275 @@
-document.addEventListener('DOMContentLoaded', () => {
-    // --- Global State & Variables ---
-    const allTestData = {
-        hyperactivityScore: 0,
-        reactionTimes: [],
-        avgReactionTime: 0,
-        attentionHits: 0,
-        attentionMisses: 0,
-        attentionFalseClicks: 0,
-        memoryScore: 0
-    };
+let currentStep = 0;
+const state = {
+    audioAnalysis: null,
+    reactionTimes: [],
+    memoryScore: 0,
+    stroopScore: 0,
+    timeDiff: 0,
+    mediaRecorder: null,
+    audioChunks: []
+};
 
-    let currentStep = 0;
-    const wizardSteps = document.querySelectorAll('.wizard-step');
-    const progressBar = document.querySelector('.progress-bar');
+function goToStep(step) {
+    document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+    document.getElementById(`step-${step}`).classList.add('active');
+    currentStep = step;
+    if (step === 6) generateFinalReport();
+}
 
-    // --- Wizard Navigation ---
-    const navigateToStep = (stepIndex) => {
-        if (wizardSteps[currentStep]) {
-            wizardSteps[currentStep].classList.remove('active');
-        }
-        if (wizardSteps[stepIndex]) {
-            wizardSteps[stepIndex].classList.add('active');
-            currentStep = stepIndex;
-            updateProgressBar();
-        }
-    };
+// --- PHASE 1: AUDIO ---
+const recordBtn = document.getElementById('record-btn');
+const wave = document.getElementById('wave');
+const statusText = document.getElementById('audio-status');
 
-    const updateProgressBar = () => {
-        const progress = (currentStep / (wizardSteps.length - 1)) * 100;
-        progressBar.style.width = `${progress}%`;
-    };
-
-    document.querySelectorAll('.next-btn').forEach(button => {
-        button.addEventListener('click', () => {
-            if (currentStep < wizardSteps.length - 1) {
-                navigateToStep(currentStep + 1);
-            }
-        });
-    });
-
-    // --- Test 1: Hyperactivity Questionnaire ---
-    const hyperactivityContent = document.getElementById('hyperactivity-content');
-    const hyperactivityNextBtn = document.querySelector('#step-1 .next-btn');
-    const questions = [
-        "How often do you have trouble wrapping up the final details of a project, once the challenging parts have been done?",
-        "How often do you have difficulty getting things in order when you have to do a task that requires organization?",
-        "How often do you have problems remembering appointments or obligations?",
-        "When you have a task that requires a lot of thought, how often do you avoid or delay getting started?",
-        "How often do you fidget or squirm with your hands or feet when you have to sit down for a long time?",
-        "How often do you feel overly active and compelled to do things, like you were driven by a motor?"
-    ];
-
-    questions.forEach((q, index) => {
-        const questionItem = document.createElement('div');
-        questionItem.className = 'question-item';
-        questionItem.innerHTML = `
-            <label>${index + 1}. ${q}</label>
-            <div class="options" data-question-index="${index}">
-                <label><input type="radio" name="q${index}" value="0"><span>Never</span></label>
-                <label><input type="radio" name="q${index}" value="1"><span>Rarely</span></label>
-                <label><input type="radio" name="q${index}" value="2"><span>Sometimes</span></label>
-                <label><input type="radio" name="q${index}" value="3"><span>Often</span></label>
-                <label><input type="radio" name="q${index}" value="4"><span>Very Often</span></label>
-            </div>
-        `;
-        hyperactivityContent.appendChild(questionItem);
-    });
-
-    hyperactivityContent.addEventListener('change', (e) => {
-        if (e.target.type === 'radio') {
-            const answeredRadios = hyperactivityContent.querySelectorAll('input[type="radio"]:checked');
-            if (answeredRadios.length === questions.length) {
-                let totalScore = 0;
-                answeredRadios.forEach(radio => totalScore += parseInt(radio.value));
-                allTestData.hyperactivityScore = totalScore;
-                hyperactivityNextBtn.disabled = false;
-            }
-        }
-    });
-
-    // --- Test 2: Reaction Time ---
-    const reactionBox = document.getElementById('reaction-box');
-    const reactionAvgEl = document.getElementById('reaction-avg');
-    const reactionNextBtn = document.querySelector('#step-2 .next-btn');
-    let reactionStartTime, reactionRounds = 0;
-    const MAX_ROUNDS = 5;
-
-    reactionBox.addEventListener('click', () => {
-        if (reactionRounds >= MAX_ROUNDS) return;
-
-        if (reactionBox.style.backgroundColor === 'rgb(46, 204, 113)') { // Green
-            const endTime = new Date().getTime();
-            const timeTaken = endTime - reactionStartTime;
-            allTestData.reactionTimes.push(timeTaken);
-            reactionRounds++;
-            reactionBox.innerText = `Time: ${timeTaken}ms\nRound: ${reactionRounds}/${MAX_ROUNDS}`;
-            reactionBox.style.backgroundColor = '#ef4444'; // Back to Red
-
-            if (reactionRounds < MAX_ROUNDS) {
-                setTimeout(startReactionTest, 1000 + Math.random() * 2000);
-            } else {
-                const sum = allTestData.reactionTimes.reduce((a, b) => a + b, 0);
-                allTestData.avgReactionTime = sum / allTestData.reactionTimes.length;
-                reactionAvgEl.textContent = allTestData.avgReactionTime.toFixed(0);
-                reactionBox.innerText = 'Done!';
-                reactionNextBtn.disabled = false;
-            }
-        } else if (reactionBox.innerText.includes('Click me to start')) {
-            reactionBox.innerText = '...Wait for green';
-            setTimeout(startReactionTest, 1000 + Math.random() * 2000);
-        }
-    });
-
-    function startReactionTest() {
-        reactionBox.style.backgroundColor = '#2ecc71'; // Green
-        reactionStartTime = new Date().getTime();
-    }
-
-    // --- Test 3: Attention Span (Go/No-Go) ---
-    const startAttentionBtn = document.getElementById('start-attention');
-    const attentionStimulus = document.getElementById('attention-stimulus');
-    const attentionNextBtn = document.querySelector('#step-3 .next-btn');
-    const HITS_EL = document.getElementById('attention-hits');
-    const MISSES_EL = document.getElementById('attention-misses');
-    const FALSE_CLICKS_EL = document.getElementById('attention-false-clicks');
-    let attentionTimeout, currentStimulusIsTarget = false, spacebarPressed = false;
-    const ATTENTION_TEST_DURATION = 30000;
-
-    startAttentionBtn.addEventListener('click', () => {
-        startAttentionBtn.disabled = true;
-        allTestData.attentionHits = 0; HITS_EL.textContent = 0;
-        allTestData.attentionMisses = 0; MISSES_EL.textContent = 0;
-        allTestData.attentionFalseClicks = 0; FALSE_CLICKS_EL.textContent = 0;
-        currentStimulusIsTarget = false;
-
-        const testInterval = setInterval(showStimulus, 1500);
-
-        setTimeout(() => {
-            clearInterval(testInterval);
-            clearTimeout(attentionTimeout);
-            if (currentStimulusIsTarget && !spacebarPressed) {
-                allTestData.attentionMisses++;
-                MISSES_EL.textContent = allTestData.attentionMisses;
-            }
-            attentionStimulus.style.opacity = '0';
-            attentionNextBtn.disabled = false;
-            document.removeEventListener('keydown', handleAttentionKeyPress);
-        }, ATTENTION_TEST_DURATION);
-
-        document.addEventListener('keydown', handleAttentionKeyPress);
-    });
-
-    const handleAttentionKeyPress = (e) => {
-        if (e.code === 'Space' && !spacebarPressed) {
-            spacebarPressed = true;
-            if (currentStimulusIsTarget) {
-                allTestData.attentionHits++;
-            } else {
-                allTestData.attentionFalseClicks++;
-            }
-            HITS_EL.textContent = allTestData.attentionHits;
-            FALSE_CLICKS_EL.textContent = allTestData.attentionFalseClicks;
-        }
-    };
-
-    function showStimulus() {
-        if (currentStimulusIsTarget && !spacebarPressed) {
-            allTestData.attentionMisses++;
-            MISSES_EL.textContent = allTestData.attentionMisses;
-        }
-        spacebarPressed = false;
-        if (Math.random() > 0.3) {
-            currentStimulusIsTarget = true;
-            attentionStimulus.style.backgroundColor = '#2ecc71';
-            attentionStimulus.style.borderRadius = '50%';
-        } else {
-            currentStimulusIsTarget = false;
-            attentionStimulus.style.backgroundColor = '#ef4444';
-            attentionStimulus.style.borderRadius = '0';
-        }
-        attentionStimulus.style.opacity = '1';
-        attentionTimeout = setTimeout(() => {
-            attentionStimulus.style.opacity = '0';
-        }, 1300);
-    }
-
-    // --- Test 4: Visual Memory ---
-    const startMemoryBtn = document.getElementById('start-memory');
-    const memoryGrid = document.getElementById('memory-grid');
-    const memoryLevelEl = document.getElementById('memory-level');
-    const memoryResultsBtn = document.getElementById('get-results-btn');
-    let memorySequence = [], playerSequence = [], memoryLevel = 0, isPlayerTurn = false;
-
-    for (let i = 0; i < 9; i++) {
-        const tile = document.createElement('div');
-        tile.className = 'memory-tile';
-        tile.dataset.index = i;
-        tile.addEventListener('click', () => handleTileClick(i));
-        memoryGrid.appendChild(tile);
-    }
-    const memoryTiles = document.querySelectorAll('.memory-tile');
-
-    startMemoryBtn.addEventListener('click', () => {
-        startMemoryBtn.style.display = 'none';
-        memoryLevel = 1;
-        memorySequence = [];
-        nextMemoryLevel();
-    });
-
-    function nextMemoryLevel() {
-        isPlayerTurn = false;
-        playerSequence = [];
-        memoryLevelEl.textContent = memoryLevel;
-        memorySequence.push(Math.floor(Math.random() * 9));
-        showSequence();
-    }
-
-    async function showSequence() {
-        for (const index of memorySequence) {
-            await new Promise(resolve => setTimeout(resolve, 300));
-            memoryTiles[index].classList.add('active');
-            await new Promise(resolve => setTimeout(resolve, 600));
-            memoryTiles[index].classList.remove('active');
-        }
-        isPlayerTurn = true;
-    }
-
-    function handleTileClick(index) {
-        if (!isPlayerTurn) return;
-        playerSequence.push(index);
-        const lastIndex = playerSequence.length - 1;
-        if (playerSequence[lastIndex] !== memorySequence[lastIndex]) {
-            isPlayerTurn = false;
-            memoryTiles[index].classList.add('player-wrong');
-            allTestData.memoryScore = memoryLevel - 1;
-            memoryLevelEl.textContent = `${allTestData.memoryScore} (Game Over)`;
-            memoryResultsBtn.disabled = false;
-            return;
-        }
-        memoryTiles[index].classList.add('player-correct');
-        setTimeout(() => memoryTiles[index].classList.remove('player-correct'), 200);
-        if (playerSequence.length === memorySequence.length) {
-            memoryLevel++;
-            setTimeout(nextMemoryLevel, 1000);
-        }
-    }
-
-    // --- Final Step: Get Results from Backend ---
-    memoryResultsBtn.addEventListener('click', async () => {
-        navigateToStep(wizardSteps.length - 1);
-        const loader = document.getElementById('loader');
-        const resultsOutput = document.getElementById('results-output');
-        loader.style.display = 'block';
-        resultsOutput.style.display = 'none';
-
+recordBtn.addEventListener('click', async () => {
+    if (state.mediaRecorder && state.mediaRecorder.state === 'recording') {
+        state.mediaRecorder.stop();
+    } else {
         try {
-            const response = await fetch('/analyze', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(allTestData)
-            });
-            if (!response.ok) throw new Error(`Server error: ${response.statusText}`);
-            const result = await response.json();
-            
-            // --- THIS IS THE KEY CHANGE ---
-            // Use marked.parse() to convert Markdown to HTML
-            resultsOutput.innerHTML = marked.parse(result.analysis);
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            state.mediaRecorder = new MediaRecorder(stream);
+            state.audioChunks = [];
+            state.mediaRecorder.ondataavailable = e => state.audioChunks.push(e.data);
+            state.mediaRecorder.onstop = async () => {
+                wave.classList.add('hidden');
+                recordBtn.textContent = "Analyzing...";
+                recordBtn.disabled = true;
+                const blob = new Blob(state.audioChunks, { type: 'audio/wav' });
+                await uploadAudio(blob);
+            };
+            state.mediaRecorder.start();
+            recordBtn.textContent = "Stop Recording";
+            recordBtn.style.background = "#ef4444";
+            wave.classList.remove('hidden');
+            statusText.textContent = "Recording...";
+        } catch (err) { alert("Microphone needed."); }
+    }
+});
 
-        } catch (error) {
-            console.error("Error fetching analysis:", error);
-            resultsOutput.innerHTML = "Sorry, there was an error getting your analysis. Please try again later.";
-        } finally {
-            loader.style.display = 'none';
-            resultsOutput.style.display = 'block';
+async function uploadAudio(blob) {
+    const formData = new FormData();
+    formData.append('audio_data', blob);
+    try {
+        const res = await fetch('/analyze_audio', { method: 'POST', body: formData });
+        const data = await res.json();
+        state.audioAnalysis = data.analysis;
+        setTimeout(() => goToStep(2), 1000);
+    } catch (e) { console.error(e); }
+}
+
+// --- PHASE 2: REACTION ---
+const reactionBox = document.getElementById('reaction-area');
+const reactionStartOverlay = document.getElementById('reaction-start-overlay');
+let rounds = 0, maxRounds = 5, startTime, waitingForGreen = false, reactionTimer;
+
+function initReactionTest() {
+    reactionStartOverlay.style.display = 'none';
+    reactionBox.classList.remove('hidden');
+    startReactionRound();
+}
+
+reactionBox.addEventListener('click', () => {
+    if (waitingForGreen) {
+        reactionBox.innerText = "Too Early!";
+        clearTimeout(reactionTimer);
+        waitingForGreen = false;
+        setTimeout(startReactionRound, 1000);
+        return;
+    }
+    if (reactionBox.classList.contains('go')) {
+        state.reactionTimes.push(Date.now() - startTime);
+        rounds++;
+        document.getElementById('reaction-counter').innerText = `Round: ${rounds}/${maxRounds}`;
+        reactionBox.classList.remove('go');
+        reactionBox.innerText = "Done!";
+        if (rounds >= maxRounds) setTimeout(() => goToStep(3), 1000);
+        else setTimeout(startReactionRound, 1000);
+    }
+});
+
+function startReactionRound() {
+    reactionBox.className = 'reaction-box ready';
+    reactionBox.innerText = "Wait...";
+    waitingForGreen = true;
+    reactionTimer = setTimeout(() => {
+        reactionBox.className = 'reaction-box go';
+        reactionBox.innerText = "CLICK!";
+        waitingForGreen = false;
+        startTime = Date.now();
+    }, 1500 + Math.random() * 2000);
+}
+
+// --- PHASE 3: MEMORY ---
+const memoryGrid = document.getElementById('memory-grid');
+let memorySequence = [], playerSequence = [], memoryLevel = 0;
+
+for (let i = 0; i < 9; i++) {
+    const tile = document.createElement('div');
+    tile.className = 'memory-tile';
+    tile.dataset.index = i;
+    tile.addEventListener('click', () => handleMemoryClick(i));
+    memoryGrid.appendChild(tile);
+}
+
+function startMemoryTest() {
+    document.getElementById('memory-start-btn').style.display = 'none';
+    memoryGrid.classList.remove('hidden');
+    memoryLevel = 1;
+    memorySequence = [];
+    nextMemoryRound();
+}
+
+function nextMemoryRound() {
+    playerSequence = [];
+    document.getElementById('memory-level-display').innerText = `Level: ${memoryLevel}`;
+    memorySequence.push(Math.floor(Math.random() * 9));
+    playSequence();
+}
+
+async function playSequence() {
+    memoryGrid.style.pointerEvents = 'none';
+    for (const index of memorySequence) {
+        await new Promise(r => setTimeout(r, 400));
+        memoryGrid.children[index].classList.add('active');
+        await new Promise(r => setTimeout(r, 500));
+        memoryGrid.children[index].classList.remove('active');
+    }
+    memoryGrid.style.pointerEvents = 'auto';
+}
+
+function handleMemoryClick(index) {
+    const tile = memoryGrid.children[index];
+    tile.classList.add('active');
+    setTimeout(() => tile.classList.remove('active'), 200);
+    playerSequence.push(index);
+    if (playerSequence[playerSequence.length - 1] !== memorySequence[playerSequence.length - 1]) {
+        tile.classList.add('wrong');
+        state.memoryScore = memoryLevel - 1;
+        setTimeout(() => goToStep(4), 500);
+        return;
+    }
+    if (playerSequence.length === memorySequence.length) {
+        memoryLevel++;
+        setTimeout(nextMemoryRound, 1000);
+    }
+}
+
+// --- PHASE 4: STROOP ---
+const colors = ['red', 'blue', 'green'];
+let stroopRounds = 0, stroopCorrect = 0, currentStroopInk = '';
+
+function startStroopTest() {
+    document.getElementById('stroop-start-btn').style.display = 'none';
+    document.getElementById('stroop-game').classList.remove('hidden');
+    nextStroopRound();
+}
+
+function nextStroopRound() {
+    if (stroopRounds >= 5) {
+        state.stroopScore = (stroopCorrect / 5) * 100;
+        goToStep(5);
+        return;
+    }
+    stroopRounds++;
+    document.getElementById('stroop-counter').innerText = `Round: ${stroopRounds}/5`;
+    const wordText = colors[Math.floor(Math.random() * colors.length)];
+    currentStroopInk = colors[Math.floor(Math.random() * colors.length)];
+    const wordEl = document.getElementById('stroop-word');
+    wordEl.innerText = wordText;
+    wordEl.style.color = currentStroopInk;
+}
+
+function handleStroop(selectedColor) {
+    if (selectedColor === currentStroopInk) stroopCorrect++;
+    nextStroopRound();
+}
+
+// --- PHASE 5: TIME PERCEPTION (FIXED) ---
+const timeBtn = document.getElementById('time-btn');
+let timeStart;
+let timeTestActive = false;
+
+timeBtn.addEventListener('mousedown', () => {
+    if (timeBtn.disabled) return;
+    timeStart = Date.now();
+    timeTestActive = true;
+    timeBtn.innerText = "Releasing in 10s...";
+    timeBtn.classList.add('btn-held');
+});
+
+timeBtn.addEventListener('mouseup', () => {
+    if (!timeTestActive || timeBtn.disabled) return;
+    const duration = (Date.now() - timeStart) / 1000;
+    timeTestActive = false;
+    timeBtn.classList.remove('btn-held');
+    timeBtn.disabled = true;
+    state.timeDiff = duration - 10;
+    document.getElementById('time-result').innerText = `You held for: ${duration.toFixed(2)}s`;
+    setTimeout(() => goToStep(6), 1500);
+});
+
+// Safety if mouse leaves button while holding
+timeBtn.addEventListener('mouseleave', () => {
+    if (timeTestActive) {
+        timeTestActive = false;
+        timeBtn.innerText = "HOLD ME (Try Again)";
+        timeBtn.classList.remove('btn-held');
+    }
+});
+
+// --- FINAL REPORT & CHART ---
+async function generateFinalReport() {
+    try {
+        const res = await fetch('/final_report', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(state)
+        });
+        const data = await res.json();
+        
+        document.querySelector('.loader').style.display = 'none';
+        document.getElementById('final-report').innerHTML = marked.parse(data.markdown_report);
+        renderChart(data.scores);
+        
+    } catch (e) { console.error(e); }
+}
+
+function renderChart(scores) {
+    const ctx = document.getElementById('resultsChart').getContext('2d');
+    document.querySelector('.chart-container').style.display = 'block';
+
+    // Normalize for Chart (Visual Only)
+    // Variability: <150 is good. We inverse it.
+    const focusScore = Math.max(0, 100 - (scores.variability / 2)); 
+    const memoryScore = (scores.memory / 10) * 100; 
+    const inhibitionScore = scores.stroop;
+    // Time: 0 diff is perfect (100).
+    const timeScore = Math.max(0, 100 - (Math.abs(scores.time_diff) * 10)); 
+
+    new Chart(ctx, {
+        type: 'radar',
+        data: {
+            labels: ['Focus Stability', 'Working Memory', 'Impulse Control', 'Time Perception'],
+            datasets: [{
+                label: 'Cognitive Profile',
+                data: [focusScore, memoryScore, inhibitionScore, timeScore],
+                backgroundColor: 'rgba(99, 102, 241, 0.2)',
+                borderColor: '#6366f1',
+                pointBackgroundColor: '#fff',
+                pointBorderColor: '#6366f1',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            scales: {
+                r: {
+                    angleLines: { color: 'rgba(255, 255, 255, 0.1)' },
+                    grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                    pointLabels: { color: '#cbd5e1', font: { size: 12 } },
+                    ticks: { display: false, max: 100 }
+                }
+            },
+            plugins: { legend: { display: false } }
         }
     });
-
-    navigateToStep(0);
-});
+}
