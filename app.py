@@ -1,5 +1,4 @@
 import os
-import json
 import time
 import statistics
 import google.generativeai as genai
@@ -14,14 +13,13 @@ app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# Configure Gemini 2.5 Flash
+# Configure Gemini
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     print("❌ WARNING: GEMINI_API_KEY not found in .env")
 
 genai.configure(api_key=GEMINI_API_KEY)
-# Using the specific model we verified exists
-model = genai.GenerativeModel('gemini-2.5-flash')
+model = genai.GenerativeModel('gemini-2.5-flash') 
 
 @app.route('/')
 def index():
@@ -30,7 +28,7 @@ def index():
 @app.route('/analyze_audio', methods=['POST'])
 def analyze_audio():
     if 'audio_data' not in request.files:
-        return jsonify({"error": "No audio file provided"}), 400
+        return jsonify({"analysis": "No audio provided. Speech analysis skipped."}), 200
     
     file = request.files['audio_data']
     filename = secure_filename(f"user_recording_{int(time.time())}.wav")
@@ -42,13 +40,19 @@ def analyze_audio():
     try:
         audio_file = genai.upload_file(path=filepath)
         
+        # --- NEW HIGH-PRECISION PROMPT ---
         prompt = """
-        Analyze this audio for ADHD markers:
-        1. Tangentiality (wandering off-topic).
-        2. Speed/Pacing (too fast or cluttering).
-        3. Fillers (excessive 'um', 'ah').
+        You are a clinical assistant analyzing a patient's speech for ADHD markers.
+        The user was asked: "How do you plan your day?"
         
-        Return a concise summary (max 2 sentences) of the speech pattern observations.
+        Analyze the audio for:
+        1. **Tangentiality:** Did they stay on topic or wander into unrelated stories?
+        2. **Pacing:** Is the speech rapid, cluttered, or full of long pauses?
+        3. **Fillers:** Are there excessive "um", "ah", "like" (hesitancy)?
+
+        OUTPUT:
+        Provide a 2-sentence observation. Do NOT include an intro.
+        Example: "Subject displayed rapid pacing with frequent topic changes, failing to answer the prompt directly. Excessive use of filler words suggests processing delay."
         """
         
         result = model.generate_content([prompt, audio_file])
@@ -62,7 +66,7 @@ def analyze_audio():
         
     except Exception as e:
         print(f"Error in audio analysis: {e}")
-        return jsonify({"analysis": "Audio analysis failed due to server error."}), 500
+        return jsonify({"analysis": "Audio processing error. Pattern could not be determined."}), 200
 
 @app.route('/final_report', methods=['POST'])
 def final_report():
@@ -73,10 +77,10 @@ def final_report():
     variability = statistics.stdev(rt) if len(rt) > 1 else 0
     memory_score = data.get('memoryScore', 0)
     stroop_score = data.get('stroopScore', 0)
-    time_diff = abs(data.get('timeDiff', 0))
+    time_diff = data.get('timeDiff', 0) # Can be negative or positive
     speech_analysis = data.get('audioAnalysis', 'No speech data.')
 
-    # 2. Prepare Scores for Chart (Frontend needs raw numbers)
+    # 2. Prepare Scores for Chart
     scores = {
         "variability": variability,
         "memory": memory_score,
@@ -84,37 +88,33 @@ def final_report():
         "time_diff": time_diff
     }
 
-    # 3. Generate Clinical Report
+    # 3. Contextualize Logic (Prevent Hallucination)
+    # We define the status HERE so the AI is forced to agree with the math.
+    var_status = "High Variability (Attention Lapses)" if variability > 150 else "Stable"
+    mem_status = "Below Average" if memory_score < 4 else "Intact"
+    time_status = "Significant Dyschronometria" if abs(time_diff) > 2.0 else "Accurate"
+    
+    # --- NEW REPORT GENERATION PROMPT ---
     prompt = f"""
-    You are a strictly analytical algorithm. Generate a Cognitive Screening Analysis based on these 5 data points.
-    
-    **USER DATA:**
-    1. Speech Pattern: "{speech_analysis}"
-    2. Motor Variability: {variability:.2f} ms (Standard: <150ms. High variability = Attention Lapses).
-    3. Working Memory: Level {memory_score} (Standard: >4. Low = Working Memory Deficit).
-    4. Impulse Control: {stroop_score}% Accuracy (Standard: >80%. Low = Impulsivity).
-    5. Time Blindness: {time_diff:.2f}s deviation (Standard: <2.0s. High = Dyschronometria).
+    Generate a serious Cognitive Screening Report based on these EXACT metrics.
+    **CRITICAL:** Do NOT say "I cannot see the graph". Refer to the "Chart Above".
+    There is a radar chart with 4 axes: Attention Stability, Working Memory, Impulse Control, Time Perception,so the user can see a chart on screen. 
+    **PATIENT DATA:**
+    1. **Speech Pattern:** "{speech_analysis}"
+    2. **Attention Stability (Motor Test):** {variability:.2f}ms deviation. CLINICAL STATUS: {var_status}.
+    3. **Working Memory:** Level {memory_score}. CLINICAL STATUS: {mem_status}.
+    4. **Impulse Control (Stroop):** {stroop_score}% Accuracy.
+    5. **Time Perception:** Deviation of {time_diff:.2f} seconds. CLINICAL STATUS: {time_status}.
 
-    **STRICT WRITING RULES:**
-    - **NO** headers like "Client Name" or "Date".
-    - **NO** introduction. Start immediately with the "Executive Summary".
-    - **NO** roleplay. Be direct, objective, and data-driven.
-    - **MUST** quote the user's specific score in every bullet point analysis.
-    
-    **REPORT STRUCTURE:**
-    
-    ### Executive Summary
-    [Synthesize the profile in 3 sentences. Does it align with ADHD traits (High variability, Low Memory, Time Blindness)?]
-    
-    ### Domain Analysis
-    * **Attention Stability:** [State score. Analyze.]
-    * **Working Memory:** [State Level. Analyze.]
-    * **Impulse Control:** [State %. Analyze.]
-    * **Time Perception:** [State deviation. Analyze.]
-    * **Speech:** [Summarize findings.]
+    **WRITING INSTRUCTIONS:**
+    - **Executive Summary:** Synthesize the 5 points. If {var_status} is "High" OR {time_status} is "Significant", mention that the profile shows executive function challenges.
+    - **Visual Analysis:** Reference the user's chart. (e.g., "As shown in the graph, the 'Time Perception' axis shows a significant drop...")
+    - **Speech:** Incorporate the speech analysis provided above. explain what it means.
+    - **Conclusion:** If markers are off, recommend a professional evaluation. Use a supportive, objective tone.
 
-    ### Recommendation
-    [If 2+ metrics are outside standard ranges, strongly recommend professional evaluation. If mostly normal, provide reassurance.]
+    **FORMAT:**
+    - Use Markdown.
+    - NO introductory fluff ("Here is your report"). Start with "## Executive Summary".
     """
     
     try:

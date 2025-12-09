@@ -4,6 +4,7 @@
     --border: rgba(255, 255, 255, 0.1);
     --primary: #6366f1;
     --accent: #10b981;
+    --danger: #ef4444;
     --text: #f8fafc;
 }
 
@@ -11,7 +12,7 @@ body {
     margin: 0; font-family: 'Inter', sans-serif;
     background-color: var(--bg-dark); color: var(--text);
     display: flex; justify-content: center; align-items: center;
-    min-height: 100vh; overflow: hidden;
+    min-height: 100vh; overflow-y: auto; /* Allow body scroll if needed */
 }
 
 .background-orb { position: absolute; border-radius: 50%; filter: blur(80px); z-index: -1; }
@@ -21,13 +22,10 @@ body {
 .glass-container {
     background: var(--glass); backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px); border: 1px solid var(--border);
-    padding: 3rem; border-radius: 24px; width: 100%; max-width: 600px;
+    padding: 3rem; border-radius: 24px; width: 90%; max-width: 600px;
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); text-align: center;
-    max-height: 85vh; overflow-y: auto;
+    margin: 40px 0;
 }
-/* Hide scrollbar */
-.glass-container::-webkit-scrollbar { display: none; }
-.glass-container { -ms-overflow-style: none; scrollbar-width: none; }
 
 h1 { font-weight: 300; letter-spacing: -1px; margin-bottom: 0.5rem; }
 .highlight { font-weight: 600; color: var(--primary); }
@@ -45,12 +43,15 @@ p { color: #94a3b8; line-height: 1.6; }
 .btn-primary:hover { transform: translateY(-2px); }
 .btn-primary:disabled { background: #334155; cursor: not-allowed; transform: none; }
 
-/* PRESSED STATE for Time Button */
-.btn-primary.btn-held {
-    transform: scale(0.92);
-    background: #4338ca;
-    box-shadow: inset 0 3px 5px rgba(0,0,0,0.3);
-    outline: 2px solid var(--accent);
+/* TIME BUTTON PULSE */
+.pulse-active {
+    background: var(--danger) !important;
+    animation: pulse 1.5s infinite;
+}
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 }
 
 /* Visualizer */
@@ -90,8 +91,19 @@ p { color: #94a3b8; line-height: 1.6; }
 .stroop-btn:hover { background: rgba(255,255,255,0.1); }
 .hidden { display: none !important; }
 
-@keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+/* Report & Chart */
+.chart-container { 
+    position: relative; 
+    height: 400px; /* Increased from 350px to let it breathe */
+    width: 100%; 
+    max-width: 500px; /* Prevents it from getting too wide on desktop */
+    margin: 0 auto 30px auto; /* Centers it nicely */
+    display: none; 
+}
 .markdown-body { text-align: left; margin-top: 20px; font-size: 0.95rem; color: #cbd5e1; }
-.markdown-body strong { color: #fff; }
+.markdown-body strong { color: #fff; font-weight: 600; }
+.markdown-body h2 { color: var(--primary); border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-top: 20px; }
+.disclaimer { font-size: 0.7rem; color: #64748b; margin-top: 30px; font-style: italic; }
+
 .loader { border: 4px solid var(--border); border-top: 4px solid var(--primary); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto; }
 @keyframes spin { 100% { transform: rotate(360deg); } }

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NeuroFocus AI | Full Battery</title>
+    <title>NeuroFocus AI | Cognitive Battery</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -17,21 +17,21 @@
     <div class="glass-container">
         <header>
             <h1>NeuroFocus <span class="highlight">AI</span></h1>
-            <p>5-Stage Cognitive Battery</p>
+            <p>ADHD Biomarker Screening</p>
         </header>
 
         <section id="step-0" class="step active">
             <div class="card-content">
                 <h2>The Protocol</h2>
-                <p>We will analyze 5 key markers: <strong>Speech, Focus, Memory, Inhibition, and Time Perception</strong>.</p>
+                <p>We will analyze 5 key cognitive markers. Please minimize distractions.</p>
                 <button class="btn-primary" onclick="goToStep(1)">Initialize System</button>
             </div>
         </section>
 
         <section id="step-1" class="step">
             <div class="card-content">
-                <h2>Phase 1: Speech Pattern</h2>
-                <p class="instruction">Tap 'Record' and describe <strong>"How you plan your day"</strong> for 30 seconds.</p>
+                <h2>Phase 1: Verbal Pattern</h2>
+                <p class="instruction">Tap 'Record' and tell us: <strong>"How do you plan your day?"</strong> (Speak for ~20s).</p>
                 <div class="visualizer-box">
                     <div id="wave" class="wave hidden"><span></span><span></span><span></span><span></span><span></span></div>
                 </div>
@@ -43,7 +43,7 @@
         <section id="step-2" class="step">
             <div class="card-content">
                 <h2>Phase 2: Motor Variability</h2>
-                <p class="instruction">Click the box when it turns <strong>GREEN</strong>.</p>
+                <p class="instruction">Click the box as soon as it turns <strong>GREEN</strong>.</p>
                 <div id="reaction-start-overlay">
                     <button class="btn-primary" onclick="initReactionTest()">Start Motor Test</button>
                 </div>
@@ -83,10 +83,10 @@
         <section id="step-5" class="step">
             <div class="card-content">
                 <h2>Phase 5: Time Perception</h2>
-                <p class="instruction"><strong>Time Blindness Check:</strong></p>
-                <p>Click and <strong>HOLD</strong> the button below. Release it when you feel exactly <strong>10 Seconds</strong> have passed.</p>
+                <p class="instruction">Test your internal clock.</p>
+                <p>1. Click <strong>START</strong>.<br>2. Wait for exactly <strong>10 Seconds</strong> (count in your head).<br>3. Click <strong>STOP</strong>.</p>
                 
-                <button id="time-btn" class="btn-primary">HOLD ME</button>
+                <button id="time-btn" class="btn-primary">START TIMER</button>
                 <p id="time-result" class="status-text"></p>
             </div>
         </section>
@@ -96,12 +96,17 @@
                 <h2>Neuro-Cognitive Profile</h2>
                 <div class="loader"></div>
                 
-                <div class="chart-container" style="position: relative; height:300px; width:100%; margin-bottom: 20px; display:none;">
+                <div class="chart-container">
                     <canvas id="resultsChart"></canvas>
                 </div>
 
                 <div id="final-report" class="markdown-body"></div>
                 <button class="btn-primary" onclick="window.print()" style="margin-top: 20px; background: #334155;">Save PDF</button>
+                
+                <p class="disclaimer">
+                    *Disclaimer: This tool is for educational purposes only and is not a clinical diagnosis. 
+                    Please consult a psychiatrist for professional evaluation.
+                </p>
             </div>
         </section>
     </div>

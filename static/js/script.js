@@ -1,6 +1,6 @@
 let currentStep = 0;
 const state = {
-    audioAnalysis: null,
+    audioAnalysis: "No speech provided.", // Default value
     reactionTimes: [],
     memoryScore: 0,
     stroopScore: 0,
@@ -27,22 +27,34 @@ recordBtn.addEventListener('click', async () => {
     } else {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            
+            const track = stream.getAudioTracks()[0];
+            console.log("🎤 Using Microphone:", track.label);
+            console.log("Enabled:", track.enabled);
+            console.log("Muted:", track.muted);
             state.mediaRecorder = new MediaRecorder(stream);
             state.audioChunks = [];
             state.mediaRecorder.ondataavailable = e => state.audioChunks.push(e.data);
+            
             state.mediaRecorder.onstop = async () => {
                 wave.classList.add('hidden');
-                recordBtn.textContent = "Analyzing...";
+                recordBtn.textContent = "Processing Speech...";
                 recordBtn.disabled = true;
+                recordBtn.style.background = "#334155";
+                
                 const blob = new Blob(state.audioChunks, { type: 'audio/wav' });
                 await uploadAudio(blob);
             };
+            
             state.mediaRecorder.start();
             recordBtn.textContent = "Stop Recording";
             recordBtn.style.background = "#ef4444";
             wave.classList.remove('hidden');
-            statusText.textContent = "Recording...";
-        } catch (err) { alert("Microphone needed."); }
+            statusText.textContent = "Listening...";
+        } catch (err) { 
+            alert("Microphone access denied. Skipping audio test."); 
+            setTimeout(() => goToStep(2), 1000);
+        }
     }
 });
 
@@ -53,11 +65,15 @@ async function uploadAudio(blob) {
         const res = await fetch('/analyze_audio', { method: 'POST', body: formData });
         const data = await res.json();
         state.audioAnalysis = data.analysis;
+        recordBtn.innerText = "Analyzed!";
         setTimeout(() => goToStep(2), 1000);
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+        console.error(e);
+        setTimeout(() => goToStep(2), 1000);
+    }
 }
 
-// --- PHASE 2: REACTION ---
+// --- PHASE 2: REACTION (UNCHANGED logic, just ensuring variables exist) ---
 const reactionBox = document.getElementById('reaction-area');
 const reactionStartOverlay = document.getElementById('reaction-start-overlay');
 let rounds = 0, maxRounds = 5, startTime, waitingForGreen = false, reactionTimer;
@@ -99,7 +115,7 @@ function startReactionRound() {
     }, 1500 + Math.random() * 2000);
 }
 
-// --- PHASE 3: MEMORY ---
+// --- PHASE 3: MEMORY (UNCHANGED) ---
 const memoryGrid = document.getElementById('memory-grid');
 let memorySequence = [], playerSequence = [], memoryLevel = 0;
 
@@ -154,7 +170,7 @@ function handleMemoryClick(index) {
     }
 }
 
-// --- PHASE 4: STROOP ---
+// --- PHASE 4: STROOP (UNCHANGED) ---
 const colors = ['red', 'blue', 'green'];
 let stroopRounds = 0, stroopCorrect = 0, currentStroopInk = '';
 
@@ -184,40 +200,38 @@ function handleStroop(selectedColor) {
     nextStroopRound();
 }
 
-// --- PHASE 5: TIME PERCEPTION (FIXED) ---
+// --- PHASE 5: TIME PERCEPTION (REWRITTEN) ---
 const timeBtn = document.getElementById('time-btn');
 let timeStart;
-let timeTestActive = false;
+let isTiming = false;
 
-timeBtn.addEventListener('mousedown', () => {
+timeBtn.addEventListener('click', () => {
     if (timeBtn.disabled) return;
-    timeStart = Date.now();
-    timeTestActive = true;
-    timeBtn.innerText = "Releasing in 10s...";
-    timeBtn.classList.add('btn-held');
-});
 
-timeBtn.addEventListener('mouseup', () => {
-    if (!timeTestActive || timeBtn.disabled) return;
-    const duration = (Date.now() - timeStart) / 1000;
-    timeTestActive = false;
-    timeBtn.classList.remove('btn-held');
-    timeBtn.disabled = true;
-    state.timeDiff = duration - 10;
-    document.getElementById('time-result').innerText = `You held for: ${duration.toFixed(2)}s`;
-    setTimeout(() => goToStep(6), 1500);
-});
-
-// Safety if mouse leaves button while holding
-timeBtn.addEventListener('mouseleave', () => {
-    if (timeTestActive) {
-        timeTestActive = false;
-        timeBtn.innerText = "HOLD ME (Try Again)";
-        timeBtn.classList.remove('btn-held');
+    if (!isTiming) {
+        // START
+        isTiming = true;
+        timeStart = Date.now();
+        timeBtn.innerText = "STOP (When 10s passed)";
+        timeBtn.classList.add('pulse-active');
+    } else {
+        // STOP
+        const duration = (Date.now() - timeStart) / 1000;
+        isTiming = false;
+        timeBtn.disabled = true;
+        timeBtn.classList.remove('pulse-active');
+        
+        state.timeDiff = duration - 10; // Calculate diff
+        
+        document.getElementById('time-result').innerText = 
+            `You stopped at: ${duration.toFixed(2)}s (Diff: ${state.timeDiff.toFixed(2)}s)`;
+        
+        timeBtn.innerText = "Processing...";
+        setTimeout(() => goToStep(6), 2000);
     }
 });
 
-// --- FINAL REPORT & CHART ---
+// --- PHASE 6: REPORT & CHART (FIXED PADDING) ---
 async function generateFinalReport() {
     try {
         const res = await fetch('/final_report', {
@@ -238,15 +252,17 @@ function renderChart(scores) {
     const ctx = document.getElementById('resultsChart').getContext('2d');
     document.querySelector('.chart-container').style.display = 'block';
 
-    // Normalize for Chart (Visual Only)
-    // Variability: <150 is good. We inverse it.
+    // Normalize Data
     const focusScore = Math.max(0, 100 - (scores.variability / 2)); 
     const memoryScore = (scores.memory / 10) * 100; 
     const inhibitionScore = scores.stroop;
-    // Time: 0 diff is perfect (100).
     const timeScore = Math.max(0, 100 - (Math.abs(scores.time_diff) * 10)); 
 
-    new Chart(ctx, {
+    if (window.myRadarChart) {
+        window.myRadarChart.destroy(); // Destroy old chart if re-running
+    }
+
+    window.myRadarChart = new Chart(ctx, {
         type: 'radar',
         data: {
             labels: ['Focus Stability', 'Working Memory', 'Impulse Control', 'Time Perception'],
@@ -257,16 +273,32 @@ function renderChart(scores) {
                 borderColor: '#6366f1',
                 pointBackgroundColor: '#fff',
                 pointBorderColor: '#6366f1',
+                pointHoverBackgroundColor: '#fff',
+                pointHoverBorderColor: '#6366f1',
                 borderWidth: 2
             }]
         },
         options: {
+            responsive: true,
+            maintainAspectRatio: false, // <--- CRITICAL: Lets it fit the container height perfectly
+            layout: {
+                padding: {
+                    top: 20,
+                    bottom: 20,
+                    left: 60,  // <--- INCREASED: Space for "Time Perception"
+                    right: 60  // <--- INCREASED: Space for "Working Memory"
+                }
+            },
             scales: {
                 r: {
                     angleLines: { color: 'rgba(255, 255, 255, 0.1)' },
                     grid: { color: 'rgba(255, 255, 255, 0.1)' },
-                    pointLabels: { color: '#cbd5e1', font: { size: 12 } },
-                    ticks: { display: false, max: 100 }
+                    pointLabels: { 
+                        color: '#cbd5e1', 
+                        font: { size: 12, weight: '600', family: 'Inter' },
+                        padding: 20 // Pushes text further away from the graph tip
+                    },
+                    ticks: { display: false, max: 100, min: 0 }
                 }
             },
             plugins: { legend: { display: false } }
